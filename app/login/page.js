@@ -1,12 +1,16 @@
 'use client';
 
-import { Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 function LoginForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const from = searchParams.get('from') || '/admin';
+  const [from, setFrom] = useState('/admin');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setFrom(params.get('from') || '/admin');
+  }, []);
 
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
