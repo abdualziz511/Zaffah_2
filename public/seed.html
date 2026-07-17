@@ -1,0 +1,132 @@
+﻿<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>Seed Database - Studio77</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; padding: 24px; background: #0d0d1a; color: #fff; direction: rtl; }
+  h1 { color: #cca43b; margin-bottom: 16px; }
+  p { color: #aaa; margin-bottom: 20px; }
+  button { background: #cca43b; border: none; padding: 14px 32px; font-size: 1rem; cursor: pointer; border-radius: 8px; font-weight: bold; color: #000; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #log { margin-top: 20px; }
+  .msg { padding: 10px 14px; margin: 6px 0; border-radius: 6px; font-family: monospace; font-size: 0.9rem; }
+  .ok  { background: rgba(74,222,128,0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
+  .err { background: rgba(248,113,113,0.15); color: #f87171; border: 1px solid rgba(248,113,113,0.3); }
+  .info{ background: rgba(204,164,59,0.15); color: #cca43b; border: 1px solid rgba(204,164,59,0.3); }
+</style>
+</head>
+<body>
+<h1>🌱 تهيئة قاعدة البيانات</h1>
+<p>يُدخل هذا الزر بيانات تجريبية كاملة في Supabase مباشرة من المتصفح</p>
+<button id="btn" onclick="seedAll()">🚀 ابدأ إدخال البيانات</button>
+<div id="log"></div>
+
+<script>
+const SUPA_URL = 'https://usersdtgevlmimfoxajg.supabase.co';
+const SVC_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzZXJzZHRnZXZsbWltZm94YWpnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NDIyMDgyMiwiZXhwIjoyMDk5Nzk2ODIyfQ.ImX79MDne7EHO7PN9mhF8gSF7DZwogHr67M1-Nl7KYs';
+
+const H = {
+  'apikey': SVC_KEY,
+  'Authorization': 'Bearer ' + SVC_KEY,
+  'Content-Type': 'application/json'
+};
+
+function addLog(text, type='info') {
+  const div = document.getElementById('log');
+  const el = document.createElement('div');
+  el.className = 'msg ' + type;
+  el.innerHTML = text;
+  div.appendChild(el);
+  el.scrollIntoView();
+}
+
+async function req(method, table, data, params='') {
+  const res = await fetch(SUPA_URL + '/rest/v1/' + table + params, {
+    method, headers: H,
+    body: data ? JSON.stringify(data) : undefined
+  });
+  const text = await res.text();
+  return { ok: res.ok, status: res.status, text };
+}
+
+async function clearTable(table) {
+  // حذف كل الصفوف
+  const r = await req('DELETE', table, null, '?id=neq.00000000-0000-0000-0000-000000000000');
+  addLog('🗑️ مسح جدول ' + table + ' — ' + r.status, r.ok ? 'ok' : 'err');
+  return r.ok;
+}
+
+async function insert(table, rows) {
+  const r = await req('POST', table, rows, '');
+  if (r.ok) {
+    addLog('✅ إدخال ' + rows.length + ' صف في ' + table, 'ok');
+  } else {
+    addLog('❌ خطأ في ' + table + ': ' + r.text.substring(0,300), 'err');
+  }
+  return r.ok;
+}
+
+async function seedAll() {
+  document.getElementById('btn').disabled = true;
+  document.getElementById('log').innerHTML = '';
+  addLog('🔄 جاري الاتصال بـ Supabase...', 'info');
+
+  try {
+    // --- 1. مسح الجداول ---
+    addLog('═══ الخطوة 1: مسح البيانات القديمة ═══', 'info');
+    await clearTable('tracks');
+    await clearTable('coming_soon');
+    await clearTable('artists');
+    await clearTable('filters');
+
+    // --- 2. الفلاتر ---
+    addLog('═══ الخطوة 2: إدخال الفلاتر ═══', 'info');
+    await insert('filters', [
+      {label:'شيلات'}, {label:'زفات'}, {label:'أناشيد'},
+      {label:'مع موسيقى'}, {label:'بدون موسيقى'}, {label:'حفلات'}, {label:'أعراس'}
+    ]);
+
+    // --- 3. الفنانون ---
+    addLog('═══ الخطوة 3: إدخال الفنانين ═══', 'info');
+    await insert('artists', [
+      {name:'أحمد المنشد',  specialty:'منشد ومؤدي زفات',   description:'أعذب الأصوات الوطنية والوجدانية',   image_url:'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80', is_featured:true},
+      {name:'فهد المطرب',   specialty:'مطرب وملحن شعبي',   description:'خبير المقامات الموسيقية المحلية',    image_url:'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&auto=format&fit=crop&q=80', is_featured:true},
+      {name:'المهندس حسام', specialty:'مهندس صوت وتوزيع',  description:'ماسترينغ بتقنيات الأبعاد الثلاثية', image_url:'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=600&auto=format&fit=crop&q=80', is_featured:true},
+      {name:'المهندس خالد', specialty:'توزيع موسيقي ومكس', description:'إشراف على الكورال والآلات الحية',   image_url:'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=600&auto=format&fit=crop&q=80', is_featured:true}
+    ]);
+
+    // --- 4. قريباً ---
+    addLog('═══ الخطوة 4: إدخال شرائح قريباً ═══', 'info');
+    await insert('coming_soon', [
+      {title:'ألبوم العيد الذهبي', description:'مجموعة شيلات حصرية بمناسبة عيد الفطر المبارك', image_url:'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1200&auto=format&fit=crop&q=80', sort_order:1},
+      {title:'زفة الأميرة',        description:'زفة خاصة بأجمل الأصوات الخليجية - إصدار خاص',    image_url:'https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=1200&auto=format&fit=crop&q=80', sort_order:2},
+      {title:'نشيد الوطن',         description:'نشيد وطني بمناسبة اليوم الوطني المجيد',           image_url:'https://images.unsplash.com/photo-1516280440614-37939bbacd6a?w=1200&auto=format&fit=crop&q=80', sort_order:3}
+    ]);
+
+    // --- 5. الأعمال الصوتية ---
+    addLog('═══ الخطوة 5: إدخال الأعمال الصوتية ═══', 'info');
+    const ok = await insert('tracks', [
+      {title:'شيلة فخر الأجيال',   artist_name:'أحمد المنشد',  category:'sheelat', section:'latest',    is_exclusive:false, audio_url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', cover_image_url:'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=600&auto=format&fit=crop&q=80', description:'شيلة حماسية وطنية رائعة',    duration:'03:45', filters:['شيلات','مع موسيقى']},
+      {title:'زفة الأفراح الكبرى', artist_name:'المهندس خالد', category:'zaffat',   section:'exclusive', is_exclusive:true,  audio_url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', cover_image_url:'https://images.unsplash.com/photo-1516280440614-37939bbacd6a?w=600&auto=format&fit=crop&q=80', description:'زفة ملكية مع توزيع خاص',   duration:'05:20', filters:['زفات','مع موسيقى']},
+      {title:'نشيد النور والإيمان',artist_name:'المهندس حسام', category:'anasheed', section:'latest',    is_exclusive:false, audio_url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3', cover_image_url:'https://images.unsplash.com/photo-1484755560693-a4074577af3a?w=600&auto=format&fit=crop&q=80', description:'نشيد إسلامي بدون موسيقى',  duration:'04:10', filters:['أناشيد','بدون موسيقى']},
+      {title:'شيلة العيد الذهبية', artist_name:'فهد المطرب',   category:'sheelat', section:'exclusive', is_exclusive:true,  audio_url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', cover_image_url:'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=600&auto=format&fit=crop&q=80', description:'شيلة العيد الحصرية',       duration:'04:30', filters:['شيلات','مع موسيقى']},
+      {title:'زفة ملكية فاخرة',    artist_name:'أحمد المنشد',  category:'zaffat',   section:'latest',    is_exclusive:false, audio_url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3', cover_image_url:'https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=600&auto=format&fit=crop&q=80', description:'زفة خليجية أصيلة',        duration:'03:55', filters:['زفات','بدون موسيقى']},
+      {title:'شيلة الوطن والفداء', artist_name:'فهد المطرب',   category:'sheelat', section:'latest',    is_exclusive:false, audio_url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3', cover_image_url:'https://images.unsplash.com/photo-1487180144184-71d7b4f4a1d4?w=600&auto=format&fit=crop&q=80', description:'شيلة وطنية حماسية',       duration:'05:00', filters:['شيلات','بدون موسيقى']}
+    ]);
+
+    if (ok) {
+      addLog('═══════════════════════════════════', 'info');
+      addLog('🎉 تم إدخال جميع البيانات بنجاح!<br>اضغط على الزر أدناه لفتح الموقع:', 'ok');
+      addLog('<a href="http://localhost:3000" target="_blank" style="color:#cca43b;font-size:1.1rem;text-decoration:none;font-weight:bold">🌐 افتح الموقع ← localhost:3000</a>', 'ok');
+    }
+  } catch(e) {
+    addLog('❌ خطأ غير متوقع: ' + e.message, 'err');
+  }
+
+  document.getElementById('btn').disabled = false;
+}
+</script>
+</body>
+</html>
