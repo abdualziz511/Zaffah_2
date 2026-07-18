@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
 import {
   ShoppingBag,
   Bell,
@@ -247,41 +246,43 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [comingSoon]);
 
-  // Fetch data on mount — مباشرة من Supabase (client-side)
+  // Fetch data on mount — عبر API routes داخل الموقع
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // جلب البيانات مباشرة من Supabase بدون المرور بالـ API Routes
-        const [
-          { data: tracksData,   error: tracksErr },
-          { data: artistsData,  error: artistsErr },
-          { data: comingData,   error: comingErr },
-          { data: filtersData,  error: filtersErr },
-          { data: bookingsData, error: bookingsErr },
-        ] = await Promise.all([
-          supabase.from('tracks').select('*, artists(id,name,image_url,specialty)').order('created_at', { ascending: false }),
-          supabase.from('artists').select('*').order('created_at', { ascending: true }),
-          supabase.from('coming_soon').select('*').order('sort_order', { ascending: true }),
-          supabase.from('filters').select('*').order('created_at', { ascending: true }),
-          supabase.from('bookings').select('*').order('created_at', { ascending: false }),
+        const [tracksRes, artistsRes, comingRes, filtersRes, bookingsRes] = await Promise.all([
+          fetch('/api/tracks'),
+          fetch('/api/artists'),
+          fetch('/api/coming-soon'),
+          fetch('/api/filters'),
+          fetch('/api/bookings'),
         ]);
 
-        if (tracksErr)   console.error('tracks error:', tracksErr.message);
-        if (artistsErr)  console.error('artists error:', artistsErr.message);
-        if (comingErr)   console.error('coming_soon error:', comingErr.message);
-        if (filtersErr)  console.error('filters error:', filtersErr.message);
-        if (bookingsErr) console.error('bookings error:', bookingsErr.message);
-
-        if (tracksData) {
-          setTracks(tracksData);
-          if (tracksData.length > 0) setCurrentTrack(tracksData[0]);
+        if (!tracksRes.ok || !artistsRes.ok || !comingRes.ok || !filtersRes.ok || !bookingsRes.ok) {
+          const errors = [];
+          if (!tracksRes.ok) errors.push('tracks');
+          if (!artistsRes.ok) errors.push('artists');
+          if (!comingRes.ok) errors.push('coming_soon');
+          if (!filtersRes.ok) errors.push('filters');
+          if (!bookingsRes.ok) errors.push('bookings');
+          throw new Error(`API fetch failed: ${errors.join(', ')}`);
         }
-        if (artistsData)  setArtists(artistsData);
-        if (comingData)   setComingSoon(comingData);
-        if (filtersData)  setFilters(filtersData);
-        if (bookingsData) setBookings(bookingsData);
 
+        const [tracksData, artistsData, comingData, filtersData, bookingsData] = await Promise.all([
+          tracksRes.json(),
+          artistsRes.json(),
+          comingRes.json(),
+          filtersRes.json(),
+          bookingsRes.json(),
+        ]);
+
+        setTracks(tracksData || []);
+        if (tracksData?.length > 0) setCurrentTrack(tracksData[0]);
+        setArtists(artistsData || []);
+        setComingSoon(comingData || []);
+        setFilters(filtersData || []);
+        setBookings(bookingsData || []);
       } catch (err) {
         console.error('fetchData error:', err);
       } finally {

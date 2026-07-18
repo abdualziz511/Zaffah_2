@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
 import {
   ShoppingBag,
   Bell,
@@ -80,14 +79,30 @@ export default function AdminPage() {
 
     const fetchAllData = async () => {
       try {
-        const [
-          { data: aData }, { data: tData }, { data: fData }, { data: cData }, { data: bData }
-        ] = await Promise.all([
-          supabase.from('artists').select('*').order('created_at', { ascending: true }),
-          supabase.from('tracks').select('*').order('created_at', { ascending: false }),
-          supabase.from('filters').select('*').order('created_at', { ascending: true }),
-          supabase.from('coming_soon').select('*').order('sort_order', { ascending: true }),
-          supabase.from('bookings').select('*').order('created_at', { ascending: false })
+        const [artistsRes, tracksRes, filtersRes, comingSoonRes, bookingsRes] = await Promise.all([
+          fetch('/api/artists'),
+          fetch('/api/tracks'),
+          fetch('/api/filters'),
+          fetch('/api/coming-soon'),
+          fetch('/api/bookings'),
+        ]);
+
+        if (!artistsRes.ok || !tracksRes.ok || !filtersRes.ok || !comingSoonRes.ok || !bookingsRes.ok) {
+          const errors = [];
+          if (!artistsRes.ok) errors.push('artists');
+          if (!tracksRes.ok) errors.push('tracks');
+          if (!filtersRes.ok) errors.push('filters');
+          if (!comingSoonRes.ok) errors.push('coming_soon');
+          if (!bookingsRes.ok) errors.push('bookings');
+          throw new Error(`API fetch failed: ${errors.join(', ')}`);
+        }
+
+        const [aData, tData, fData, cData, bData] = await Promise.all([
+          artistsRes.json(),
+          tracksRes.json(),
+          filtersRes.json(),
+          comingSoonRes.json(),
+          bookingsRes.json(),
         ]);
 
         if (aData) setArtists(aData);
@@ -130,31 +145,26 @@ export default function AdminPage() {
   // CRUD actions helper
   const upsert = async (endpoint, stateList, setStateList, item, isTrack = false) => {
     try {
-      const table = endpoint === 'coming-soon' ? 'coming_soon' : endpoint;
-      let savedItem;
+      const method = item.id ? 'PUT' : 'POST';
+      const url = item.id ? `/api/${endpoint}/${item.id}` : `/api/${endpoint}`;
 
-      if (item.id) {
-        const { data, error } = await supabase.from(table).update(item).eq('id', item.id).select().single();
-        if (error) throw error;
-        savedItem = data;
-      } else {
-        const { data, error } = await supabase.from(table).insert([item]).select().single();
-        if (error) throw error;
-        savedItem = data;
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error?.error || 'فشل الحفظ');
       }
 
-      // Refresh all tracks/artists to ensure relationships display properly
-      if (isTrack || endpoint === 'artists') {
-        const { data: freshData } = await supabase.from(table).select('*').order('created_at', { ascending: endpoint === 'artists' });
-        if (freshData) setStateList(freshData);
+      const savedItem = await response.json();
+
+      if (item.id) {
+        setStateList(prev => prev.map(x => (x.id === item.id ? savedItem : x)));
       } else {
-        setStateList(prev => {
-          if (item.id) {
-            return prev.map(x => x.id === item.id ? savedItem : x);
-          } else {
-            return [...prev, savedItem];
-          }
-        });
+        setStateList(prev => [...prev, savedItem]);
       }
 
       setModal(null);
@@ -168,15 +178,17 @@ export default function AdminPage() {
   const remove = async (endpoint, setStateList, id) => {
     if (!window.confirm('هل أنت متأكد من الحذف؟')) return;
     try {
-      const table = endpoint === 'coming-soon' ? 'coming_soon' : endpoint;
-      const { error } = await supabase.from(table).delete().eq('id', id);
+      const response = await fetch(`/api/${endpoint}/${id}`, {
+        method: 'DELETE',
+      });
 
-      if (!error) {
-        setStateList(prev => prev.filter(x => x.id !== id));
-        showToast('تم الحذف بنجاح ✓');
-      } else {
-        showToast('حدث خطأ أثناء الحذف: ' + error.message);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error?.error || 'فشل الحذف');
       }
+
+      setStateList(prev => prev.filter(x => x.id !== id));
+      showToast('تم الحذف بنجاح ✓');
     } catch (err) {
       console.error(err);
       showToast('خطأ في الاتصال');
